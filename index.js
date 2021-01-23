@@ -1,16 +1,21 @@
 // @ts-check
-'use strict'
 
 // A simple server that lets users query tracking data without registering for an API key
 // also hides the user's IP, which is cool for privacy 🤫
 
-require('dotenv-safe').config()
+import dotenv from 'dotenv-safe'
+dotenv.config()
+
+import express from 'express'
+import { suiviPosteApi as suiviPoste } from 'suivi-poste'
+
+import cors from 'cors'
+import compression from 'compression'
+import expressRateLimit from 'express-rate-limit'
+import morgan from 'morgan'
 
 const API_KEY = process.env.API_KEY
 const SERVER_PORT = process.env.SERVER_PORT
-
-const express = require('express')
-const suiviPoste = require('suivi-poste')
 
 const app = express()
 
@@ -18,23 +23,22 @@ const app = express()
 app.set('trust proxy', 1)
 
 // Open CORS
-// @ts-ignore
-app.use(require('cors')())
+app.use(cors())
+
 // Compress responses
-// @ts-ignore
-app.use(require('compression')())
+app.use(compression())
+
 // Apply rate limit
 app.use(
-  // @ts-ignore
-  require('express-rate-limit')({
+  expressRateLimit({
     windowMs: 15 * 60 * 1000,
     max: 50,
     message: 'You have reached your `suivi-poste-proxy` rate limit (max 50 calls/15 minutes). Wait some time.'
   })
 )
+
 // Log requests
-// @ts-ignore
-app.use(require('morgan')('combined'))
+app.use(morgan('combined'))
 
 app.get('/_proxy/:trackingNumbersRaw', async (req, res) => {
   res.set('Content-Type', 'application/json')
@@ -45,9 +49,11 @@ app.get('/_proxy/:trackingNumbersRaw', async (req, res) => {
   const trackingNumbers = trackingNumbersRaw.split(',')
 
   try {
-    const suiviPosteApi = suiviPoste.api({
+    const suiviPosteApi = suiviPoste({
       token: API_KEY,
-      userAgent: `${req.get('User-Agent')} - call through https://suivi-poste-proxy.rigwild.dev/ proxy server`
+      userAgent: `${req.get(
+        'User-Agent'
+      )} - proxied with github.com/rigwild/suivi-poste-proxy v0.2.0 on suivi-poste-proxy.rigwild.dev`
     })
 
     const result = await suiviPosteApi.getTracking(...trackingNumbers)
